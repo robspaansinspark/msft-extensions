@@ -13,6 +13,14 @@ BEGIN {
 
 	Write-Host "### Trying to import the incorporated module for PowerBI"
 	Import-Module $PSScriptRoot\ps_modules\PowerBI -Force
+
+	try {
+		# Force powershell to use TLS 1.2 for all communications.
+		[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls10;
+	}
+	catch {
+		Write-Warning $error
+	}
 }
 PROCESS {
 
@@ -68,7 +76,7 @@ PROCESS {
 		$datasourceType = Get-VstsInput -Name DatasourceType
 		$updateAll = Get-VstsInput -Name UpdateAll -AsBool
 		$skipReport = Get-VstsInput -Name SkipReport -AsBool
-		$individualString = Get-VstsInput -Name Individual
+		$scope = Get-VstsInput -Name Scope
 		$servicePrincipalString = Get-VstsInput -Name ServicePrincipals
 		$connectionString = Get-VstsInput -Name ConnectionString
 		$ParameterInput = Get-VstsInput -Name ParameterInput
@@ -81,12 +89,17 @@ PROCESS {
 		$CrossWorkspaceRebinding = Get-VstsInput -Name CrossWorkspaceRebinding -AsBool
 		$ReportWorkspaceName = Get-VstsInput -Name ReportWorkspaceName
 		$tabularEditorArguments = Get-VstsInput -Name TabularEditorArguments
+		$principalType = Get-VstsInput -Name PrincipalType
+		$datasetPermissionsUsers = Get-VstsInput -Name DatasetPermissionsUsers
+		$datasetPermissionsGroupObjectIds = Get-VstsInput -Name DatasetPermissionsGroupObjectIds
+		$datasetAccessRight = Get-VstsInput -Name DatasetAccessRight
+		$serverName = Get-VstsInput -Name Server
+		$databaseName = Get-VstsInput -Name Database
+		$tenantID = Get-VstsInput -Name TenantID		
+		$servicePrincipalID = Get-VstsInput -Name ServicePrincipalID
+		$servicePrincipalKey = Get-VstsInput -Name ServicePrincipalKey
 
-		$individual = $false
-		if($individualString -eq "Individual"){
-			$individual = $true
-		}
-
+		
 		Write-Debug "WorkspaceName         : $($workspaceName)";
 		Write-Debug "Create                : $($Create)";
 
@@ -174,7 +187,7 @@ PROCESS {
 			Update-ConnectionStringDirectQuery -WorkspaceName $workspaceName -DatasetName $dataset -ConnectionString $connectionstring
 		}
 		elseif($action -eq "UpdateSqlCreds"){
-			Update-BasicSQLDataSourceCredentials -WorkspaceName $workspaceName -ReportName $ReportName -Username $userName -Password $password -Individual $individual
+			Update-BasicSQLDataSourceCredentials -WorkspaceName $workspaceName -ReportName $ReportName -Username $userName -Password $password -Scope $scope
 		}
 		elseif ($action -eq "UpdateParameters") {
 			Write-Debug "Dataset               : $($dataset)";
@@ -214,6 +227,38 @@ PROCESS {
 			Write-Host "Trying to change the Gateway"
 
 			Update-PowerBIDatasetDatasourcesInGroup -WorkspaceName $workspaceName -DatasetName $dataset -UpdateAll $updateAll -GatewayName $GatewayName
+		}
+		elseif ($action -eq "BindToGateway") {
+			Write-Debug "Dataset               : $($dataset)";
+			Write-Debug "UpdateAll             : $($updateAll)";
+			#Write-Debug "GatewayName           : $($GatewayName)";
+			Write-Host "Trying to bind to Gateway"
+			$groupPath = Get-PowerBIGroupPath -WorkspaceName $WorkspaceName
+			if ($groupPath) {
+				if ($UpdateAll) {
+					$sets = Get-PowerBiDataSets -GroupPath $groupPath
+					foreach ($set in $sets) {
+						$gatewayDatasources = Get-PowerBIDatasetGatewayDatasourceInGroup -Set $set -GroupPath $groupPath #GetBoundGatewayDatasources
+						#$result = Invoke-API "$powerbiUrl/datasets/$($set.id)/Default.DiscoverGateways" -Method "Get" -Verbose
+						#write-host "Discovered Gateways:" $result.value.Name
+						Update-PowerBIDatasetSource -dataset $set -groupPath $groupPath -GatewayDataSources $gatewayDatasources #BindToGateway
+					}
+				}
+				else {
+					$set = Get-PowerBiDataSet -GroupPath $groupPath -Name $Dataset
+					if ($set) {
+						$gatewayDatasources = Get-PowerBIDatasetGatewayDatasourceInGroup -Set $set -GroupPath $groupPath #GetBoundGatewayDatasources
+						Update-PowerBIDatasetSource -dataset $set -groupPath $groupPath -GatewayDataSources $gatewayDatasources
+					}
+					else {
+						Write-Warning "Dataset $Dataset could not be found."
+					}
+				}
+			}
+			else {
+				Write-Error "Workspace: $WorkspaceName could not be found..."
+			}
+
 		}
 		elseif ($action -eq "DeleteReport") {
 			Write-Debug "ReportName               : $($ReportName)";
@@ -256,6 +301,47 @@ PROCESS {
 		elseif($action -eq "DeployTabularModel"){
 			Write-Debug "Tabular Editor Args          : $($tabularEditorArguments)"
 			Publish-TabularEditor -WorkspaceName $workspaceName -FilePattern $filePattern -TabularEditorArguments $tabularEditorArguments
+		}
+		elseif($action -eq "SetDatasetPermissions"){
+			Write-Debug "Users								: $($datasetPermissionsUsers)"
+			Write-Debug "Group Ids						: $($datasetPermissionsGroupObjectIds)"
+			Write-Debug "Dataset Name					: $($dataset)"
+			Write-Debug "Principal Type				: $($principalType)"
+			Write-Debug "Permissions					: $($datasetAccessRight)"
+
+			if ($principalType -eq "User") {
+				if($datasetPermissionsUsers -eq "") {
+					Write-Error "When the Principal Type User is chosen you have to supply User(s)."
+				} else {
+					$users = $datasetPermissionsUsers.Split(",")
+
+					Add-PowerBIDatasetPermissions -WorkspaceName $workspaceName -DatasetName $dataset -PrincipalType $principalType -Identifiers $users -AccessRight $datasetAccessRight
+				}
+			}      
+
+			if ($principalType -eq "Group") {
+				if($datasetPermissionsGroupObjectIds -eq "") {
+					Write-Error "When the Principal Type Group is chosen you have to supply Group Object Id(s)."
+				}
+				else {
+					$groups = $datasetPermissionsGroupObjectIds.Split(",")
+
+					Add-PowerBIDatasetPermissions -WorkspaceName $workspaceName -DatasetName $dataset -PrincipalType $principalType -Identifiers $groups -AccessRight $datasetAccessRight
+				}
+			}
+		}
+		elseif ($action -eq "SetSQLDatasourceSPCredentials") {
+			Write-Debug "DatasetName         : $($dataset)";			
+			Write-Debug "ServerName          : $($serverName)";
+			Write-Debug "DatabaseName        : $($databaseName)";
+			Write-Debug "TenantID            : $($tenantID)";
+			Write-Debug "ServicePrincipalID  : $($servicePrincipalID)";
+			Write-Debug "ServicePrincipalKey : $($servicePrincipalKey)";
+			Write-Debug "Scope               : $($scope)";
+
+			Write-Host "Trying to set Service Principal credentials of SQL datasource"
+
+			Set-PowerBIDatasourceCredentials -WorkspaceName $workspaceName -DatasetName $dataset -DatasourceType "Sql" -ServerName $serverName -DatabaseName $databaseName -CredentialType "ServicePrincipal" -TenantID $tenantId -ServicePrincipalID $servicePrincipalID -ServicePrincipalKey $servicePrincipalKey -Scope $scope
 		}
 	}
 	finally {

@@ -1,3 +1,5 @@
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/maikvandergaag)
+
 Power BI Actions is a task for Azure Pipelines. With this tasks you can automate specific tasks for Power BI.
 
 The following tasks can be automated by using this extension:
@@ -15,6 +17,7 @@ The following tasks can be automated by using this extension:
 * Set a specific capacity for a workplace
 * Rebind Report
 * Set Refresh Schedule
+* Set Dataset Permissions
 
 The following organization types are supported from version 5 and higher:
 

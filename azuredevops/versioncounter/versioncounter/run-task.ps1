@@ -36,7 +36,7 @@ $buildDef = Invoke-RestMethod -Uri $buildUri -Method Get -ContentType "applicati
 
 if ($buildDef) {
     $definitionId = $buildDef.definition.id
-    $defUri = "$($devOpsUri)$($projectName)/_apis/build/definitions/$($definitionId)?api-version=4.1"
+    $defUri = "$($devOpsUri)$($projectName.replace(" ", "%20"))/_apis/build/definitions/$($definitionId)?api-version=4.1"
 
     Write-Host "Trying to retrieve the build definition with the url: $($defUri)."
     $definition = Invoke-RestMethod -Method Get -Uri $defUri -Headers $devOpsHeader -ContentType "application/json"
@@ -110,5 +110,5 @@ if ($buildDef) {
     }
 }
 else {
-    Write-Error "Unable to find a build definition for Project $($ProjectName) with the build id: $($buildId)."
+    Write-Error "Unable to find a build definition for Project $($ProjectName) with the build id: $($buildId) or the permissions are not satisfied."
 }

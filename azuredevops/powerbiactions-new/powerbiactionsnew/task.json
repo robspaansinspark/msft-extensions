@@ -13,7 +13,7 @@
   "demands": [],
   "version": {
     "Major": "4",
-    "Minor": "4",
+    "Minor": "5",
     "Patch": "0"
   },
   "minimumAgentVersion": "1.95.0",
@@ -48,11 +48,14 @@
         "UpdateParameters": "Update parameters",
         "TakeOwnership": "Take dataset ownership",
         "UpdateGateway": "Update gateway",
+        "BindToGateway": "Bind to gateway",
         "DeleteReport": "Delete report",
         "SetCapacity": "Set workspace capacity",
         "RebindReport": "Rebind report",
         "UpdateSqlCreds": "Update SQL credentials",
-        "SetRefreshSchedule" : "Set refresh schedule"
+        "SetRefreshSchedule" : "Set refresh schedule",
+        "SetDatasetPermissions" : "Set dataset permissions",
+        "SetSQLDatasourceSPCredentials": "Set SQL datasource Service Principal credentials"
       }
     },
     {
@@ -158,13 +161,15 @@
       "name": "Scope",
       "type": "picklist",
       "label": "Scope",
-      "defaultValue": "Individual",
+      "defaultValue": "Private",
       "required": true,
-      "helpMarkDown": "Individual is used to access entities that belong to the current user. Organization is used to access entities across the entire company. Only Power BI tenant admins are allowed to use.",
-      "visibleRule": "Action = UpdateSqlCreds",
+      "helpMarkDown": "Data sources set to Private contain sensitive or confidential information. Visibility can be restricted to authorized users. Data from a private data source won't fold in to other data sources, including other private data sources. Data sources set to Organizational can fold in to private and other organizational data sources. They can't fold in to public data sources. Visibility is set to a trusted group. Files, internet data sources, and workbook data can be set to Public. Data can fold in to other data sources. Visibility is available to everyone.",
+      "visibleRule": "Action = UpdateSqlCreds || Action = SetSQLDatasourceSPCredentials",
       "options": {
-        "Individual": "Individual",
-        "Organization": "Organization"
+        "Public": "Public",
+        "Organizational": "Organizational",
+        "Private": "Private",
+        "None": "None"
       }
     },
     {
@@ -189,7 +194,7 @@
       "defaultValue": "false",
       "required": false,
       "helpMarkDown": "Should all the datasets be changed?",
-      "visibleRule": "Action = UpdateDatasource || Action = UpdateParameters || Action = TakeOwnership || Action = DataRefresh || Action = UpdateGateway"
+      "visibleRule": "Action = UpdateDatasource || Action = UpdateParameters || Action = TakeOwnership || Action = DataRefresh || Action = UpdateGateway || Action = BindToGateway"
     },
     {
       "name": "DatasetName",
@@ -198,7 +203,7 @@
       "defaultValue": "",
       "required": false,
       "helpMarkDown": "The name of the dataset",
-      "visibleRule": "Action = DataRefresh || Action = UpdateDatasource || Action = SQLDirect || Action = UpdateParameters || Action = TakeOwnership || Action = UpdateGateway || Action = RebindReport || Action = SetRefreshSchedule"
+      "visibleRule": "Action = DataRefresh || Action = UpdateDatasource || Action = SQLDirect || Action = UpdateParameters || Action = TakeOwnership || Action = UpdateGateway || Action = BindToGateway || Action = RebindReport || Action = SetRefreshSchedule || Action = SetDatasetPermissions || Action = SetSQLDatasourceSPCredentials"
     },
     {
       "name": "ReportName",
@@ -329,7 +334,7 @@
       "label": "Set refreshschedule json",
       "defaultValue": "",
       "required": true,
-      "helpMarkDown": "A json value representing the refreshschedule example: {'value': {'days': ['Sunday'],'times': ['07:00'],'localTimeZoneId': 'UTC'}}",
+      "helpMarkDown": "A json value representing the refreshschedule example: {'value': {'notifyOption':'NoNotification', 'enabled': true, 'days': ['Monday'],'times': ['07:00'],'localTimeZoneId': 'UTC'}}",
       "visibleRule": "Action = SetRefreshSchedule"
     },
     {
@@ -340,6 +345,98 @@
       "required": true,
       "helpMarkDown": "Arguments to be provided to the Tabular Editor CLI on deployment, for more info click [here](https://docs.tabulareditor.com/te2/Command-line-Options.html)",
       "visibleRule": "Action = DeployTabularModel"
+    },
+    {
+      "name": "PrincipalType",
+      "type": "picklist",
+      "label": "Principal Type",
+      "defaultValue": "User",
+      "required": true,
+      "helpMarkDown": "The type for setting the permissions",
+      "visibleRule": "Action = SetDatasetPermissions",
+      "options": {
+        "User": "User",
+        "Group": "Group"
+      }
+    },
+    {
+      "name": "DatasetPermissionsUsers",
+      "type": "string",
+      "label": "Users (e-mail)",
+      "defaultValue": "",
+      "required": true,
+      "helpMarkDown": "If you want to add multiple users seperate them with ','.",
+      "visibleRule": "Action = SetDatasetPermissions && PrincipalType = User"
+    },
+    {
+      "name": "DatasetPermissionsGroupObjectIds",
+      "type": "string",
+      "label": "Group object Id",
+      "defaultValue": "",
+      "required": true,
+      "helpMarkDown": "If you want to add multiple groups separate the ids with ','.",
+      "visibleRule": "Action = SetDatasetPermissions && PrincipalType = Group"
+    },
+    {
+      "name": "DatasetAccessRight",
+      "type": "picklist",
+      "label": "Permission",
+      "defaultValue": "",
+      "required": true,
+      "helpMarkDown": "Specific permission: None, Read, Build (Explore) and Reshare. More [information](https://docs.microsoft.com/en-us/power-bi/developer/embedded/datasets-permissions#dataset-permissions-and-rest-apis).",
+      "visibleRule": "Action = SetDatasetPermissions",
+      "options": {
+        "None": "None",
+        "Read": "Read",
+        "ReadExplore": "Read and Build",
+        "ReadReshare": "Read and Reshare",
+        "ReadReshareExplore": "Read, Reshare and Build"
+      }
+    },
+    {
+      "name": "Server",
+      "type": "string",
+      "label": "Server",
+      "defaultValue": "",
+      "required": true,
+      "helpMarkDown": "The name of the server",
+      "visibleRule": "Action = SetSQLDatasourceSPCredentials"
+    },
+    {
+      "name": "Database",
+      "type": "string",
+      "label": "Database",
+      "defaultValue": "",
+      "required": true,
+      "helpMarkDown": "The name of the database",
+      "visibleRule": "Action = SetSQLDatasourceSPCredentials"
+    },
+    {
+      "name": "TenantID",
+      "type": "string",
+      "label": "Tenant ID",
+      "defaultValue": "",
+      "required": true,
+      "helpMarkDown": "The id of the Tenant",
+      "visibleRule": "Action = SetSQLDatasourceSPCredentials"
+    },
+    {
+      "name": "ServicePrincipalID",
+      "type": "string",
+      "label": "Service Principal ID",
+      "defaultValue": "",
+      "required": true,
+      "helpMarkDown": "The id of the Service Principal",
+      "visibleRule": "Action = SetSQLDatasourceSPCredentials"
+    },
+    {
+      "name": "ServicePrincipalKey",
+      "type": "string",
+      "label": "Service Principal Key",
+      "defaultValue": "",
+      "required": true,
+      "helpMarkDown": "The key of the Service Principal",
+      "visibleRule": "Action = SetSQLDatasourceSPCredentials"
     }
   ],
   "execution": {
